@@ -134,35 +134,27 @@ lazy val dockerSettings = Seq(
     val artifact = (assemblyOutputPath in assembly in jobServerExtras).value
     val artifactTargetPath = s"/app/${artifact.name}"
 
-    val sparkBuild = s"spark-${Versions.spark}"
-    val sparkBuildCmd = scalaBinaryVersion.value match {
-      case "2.11" =>
-        "./make-distribution.sh -Dscala-2.11 -Phadoop-2.7 -Phive"
-      case other => throw new RuntimeException(s"Scala version $other is not supported!")
-    }
-
     new sbtdocker.mutable.Dockerfile {
-      from(s"openjdk:${Versions.java}")
+      from(s"mesosphere/mesos:${Versions.mesos}")
+      //from("mesosphere/spark:1.1.0-2.1.1-hadoop-2.7")
       // Dockerfile best practices: https://docs.docker.com/articles/dockerfile_best-practices/
       expose(8090)
       expose(9999) // for JMX
-      env("MESOS_VERSION", Versions.mesos)
+
+      // Set auto-accept Oracle license
       runRaw(
-        """echo "deb http://repos.mesosphere.io/ubuntu/ trusty main" > /etc/apt/sources.list.d/mesosphere.list && \
-                apt-key adv --keyserver keyserver.ubuntu.com --recv E56151BF && \
-                apt-get -y update && \
-                apt-get -y install mesos=${MESOS_VERSION} && \
-                apt-get clean
+        """echo debconf shared/accepted-oracle-license-v1-1 select true | debconf-set-selections && \
+           echo debconf shared/accepted-oracle-license-v1-1 seen true | debconf-set-selections
         """)
-      env("MAVEN_VERSION","3.3.9")
       runRaw(
-        """mkdir -p /usr/share/maven /usr/share/maven/ref \
-          && curl -fsSL http://apache.osuosl.org/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz \
-          | tar -xzC /usr/share/maven --strip-components=1 \
-          && ln -s /usr/share/maven/bin/mvn /usr/bin/mvn
+        """apt-get update && \
+           apt-get install -y software-properties-common && \
+           add-apt-repository ppa:webupd8team/java && \
+           apt-get update && \
+           apt-get install -y oracle-java8-installer && \
+           apt-get install -y wget
         """)
-      env("MAVEN_HOME","/usr/share/maven")
-      env("MAVEN_CONFIG", "/.m2")
+      env("JAVA_HOME", "/usr/lib/jvm/java-8-oracle")
 
       copy(artifact, artifactTargetPath)
       copy(baseDirectory(_ / "bin" / "server_start.sh").value, file("app/server_start.sh"))
@@ -172,6 +164,7 @@ lazy val dockerSettings = Seq(
       copy(baseDirectory(_ / "config" / "log4j-stdout.properties").value, file("app/log4j-server.properties"))
       copy(baseDirectory(_ / "config" / "docker.conf").value, file("app/docker.conf"))
       copy(baseDirectory(_ / "config" / "docker.sh").value, file("app/settings.sh"))
+      copy(baseDirectory(_ / s"spark-dist-${Versions.spark}.tgz").value, file(s"spark-dist-${Versions.spark}.tgz"))
       // Including envs in Dockerfile makes it easy to override from docker command
       env("JOBSERVER_MEMORY", "1G")
       env("SPARK_HOME", "/spark")
@@ -179,14 +172,9 @@ lazy val dockerSettings = Seq(
       run("mkdir", "-p", "/database")
       runRaw(
         s"""
-           |wget http://d3kbcqa49mib13.cloudfront.net/$sparkBuild.tgz && \\
-           |tar -xvf $sparkBuild.tgz && \\
-           |cd $sparkBuild && \\
-           |$sparkBuildCmd && \\
-           |cd .. && \\
-           |mv $sparkBuild/dist /spark && \\
-           |rm $sparkBuild.tgz && \\
-           |rm -r $sparkBuild
+           |tar -xvf spark-dist-${Versions.spark}.tgz && \\
+           |mv dist /spark && \\
+           |rm spark-dist-${Versions.spark}.tgz
         """.stripMargin.trim
       )
       volume("/database")
@@ -194,14 +182,13 @@ lazy val dockerSettings = Seq(
     }
   },
   imageNames in docker := Seq(
-    sbtdocker.ImageName(namespace = Some("velvia"),
+    sbtdocker.ImageName(namespace = Some("lightbend"),
       repository = "spark-jobserver",
       tag = Some(
         s"${version.value}" +
           s".mesos-${Versions.mesos.split('-')(0)}" +
           s".spark-${Versions.spark}" +
-          s".scala-${scalaBinaryVersion.value}" +
-          s".jdk-${Versions.java}")
+          s".scala-${scalaBinaryVersion.value}")
     )
   )
 )
