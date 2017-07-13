@@ -137,32 +137,40 @@ lazy val dockerSettings = Seq(
     val sparkBuild = s"spark-${Versions.spark}"
     val sparkBuildCmd = scalaBinaryVersion.value match {
       case "2.11" =>
-        "./make-distribution.sh -Dscala-2.11 -Phadoop-2.7 -Phive"
+        "./dev/make-distribution.sh --name lightbend-spark --pip --tgz -Phadoop-2.7 -Phive -Pmesos -Pyarn"
       case other => throw new RuntimeException(s"Scala version $other is not supported!")
     }
 
     new sbtdocker.mutable.Dockerfile {
-      from(s"openjdk:${Versions.java}")
+      from(s"mesosphere/mesos:${Versions.mesos}")
       // Dockerfile best practices: https://docs.docker.com/articles/dockerfile_best-practices/
       expose(8090)
       expose(9999) // for JMX
-      env("MESOS_VERSION", Versions.mesos)
-      runRaw(
-        """echo "deb http://repos.mesosphere.io/ubuntu/ trusty main" > /etc/apt/sources.list.d/mesosphere.list && \
-                apt-key adv --keyserver keyserver.ubuntu.com --recv E56151BF && \
-                apt-get -y update && \
-                apt-get -y install mesos=${MESOS_VERSION} && \
-                apt-get clean
-        """)
-      env("MAVEN_VERSION","3.3.9")
+      env("MAVEN_VERSION", "3.5.0")
       runRaw(
         """mkdir -p /usr/share/maven /usr/share/maven/ref \
           && curl -fsSL http://apache.osuosl.org/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz \
           | tar -xzC /usr/share/maven --strip-components=1 \
           && ln -s /usr/share/maven/bin/mvn /usr/bin/mvn
         """)
-      env("MAVEN_HOME","/usr/share/maven")
+      env("MAVEN_HOME", "/usr/share/maven")
       env("MAVEN_CONFIG", "/.m2")
+
+      // Set auto-accept Oracle license
+      runRaw(
+        """echo debconf shared/accepted-oracle-license-v1-1 select true | debconf-set-selections && \
+           echo debconf shared/accepted-oracle-license-v1-1 seen true | debconf-set-selections
+        """)
+      runRaw(
+        """apt-get update && \
+           apt-get install -y software-properties-common && \
+           add-apt-repository ppa:webupd8team/java && \
+           apt-get update && \
+           apt-get install -y oracle-java8-installer && \
+           apt-get install -y wget
+        """)
+      // OpenJDK will result in Spark build failure later on
+      env("JAVA_HOME", "/usr/lib/jvm/java-8-oracle")
 
       copy(artifact, artifactTargetPath)
       copy(baseDirectory(_ / "bin" / "server_start.sh").value, file("app/server_start.sh"))
@@ -194,7 +202,7 @@ lazy val dockerSettings = Seq(
     }
   },
   imageNames in docker := Seq(
-    sbtdocker.ImageName(namespace = Some("velvia"),
+    sbtdocker.ImageName(namespace = Some("lightbend"),
       repository = "spark-jobserver",
       tag = Some(
         s"${version.value}" +
