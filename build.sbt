@@ -134,12 +134,29 @@ lazy val dockerSettings = Seq(
     val artifact = (assemblyOutputPath in assembly in jobServerExtras).value
     val artifactTargetPath = s"/app/${artifact.name}"
 
+    val sparkBuild = s"spark-${Versions.spark}"
+    val sparkBuildCmd = scalaBinaryVersion.value match {
+      case "2.11" =>
+        "./dev/make-distribution.sh --name lightbend-spark --pip --tgz -Phadoop-2.7 -Phive -Pmesos -Pyarn"
+      case other => throw new RuntimeException(s"Scala version $other is not supported!")
+    }
+
     new sbtdocker.mutable.Dockerfile {
       from(s"mesosphere/mesos:${Versions.mesos}")
-      //from("mesosphere/spark:1.1.0-2.1.1-hadoop-2.7")
       // Dockerfile best practices: https://docs.docker.com/articles/dockerfile_best-practices/
       expose(8090)
       expose(9999) // for JMX
+      env("MAVEN_VERSION", "3.5.0")
+      runRaw(
+        """apt-get update && \
+           apt-get install -y software-properties-common && \
+           add-apt-repository ppa:webupd8team/java && \
+           apt-get update && \
+           apt-get install -y oracle-java8-installer && \
+           apt-get install -y wget
+        """)
+      env("MAVEN_HOME", "/usr/share/maven")
+      env("MAVEN_CONFIG", "/.m2")
 
       // Set auto-accept Oracle license
       runRaw(
@@ -154,6 +171,7 @@ lazy val dockerSettings = Seq(
            apt-get install -y oracle-java8-installer && \
            apt-get install -y wget
         """)
+      // OpenJDK will result in Spark build failure later on
       env("JAVA_HOME", "/usr/lib/jvm/java-8-oracle")
 
       copy(artifact, artifactTargetPath)
