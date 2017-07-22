@@ -134,27 +134,12 @@ lazy val dockerSettings = Seq(
     val artifact = (assemblyOutputPath in assembly in jobServerExtras).value
     val artifactTargetPath = s"/app/${artifact.name}"
 
-    val sparkBuild = s"spark-${Versions.spark}"
-    val sparkBuildCmd = scalaBinaryVersion.value match {
-      case "2.11" =>
-        "./dev/make-distribution.sh --name lightbend-spark --pip --tgz -Phadoop-2.7 -Phive -Pmesos -Pyarn"
-      case other => throw new RuntimeException(s"Scala version $other is not supported!")
-    }
-
     new sbtdocker.mutable.Dockerfile {
       from(s"mesosphere/mesos:${Versions.mesos}")
       // Dockerfile best practices: https://docs.docker.com/articles/dockerfile_best-practices/
       expose(8090)
       expose(9999) // for JMX
       env("MAVEN_VERSION", "3.5.0")
-      runRaw(
-        """apt-get update && \
-           apt-get install -y software-properties-common && \
-           add-apt-repository ppa:webupd8team/java && \
-           apt-get update && \
-           apt-get install -y oracle-java8-installer && \
-           apt-get install -y wget
-        """)
       env("MAVEN_HOME", "/usr/share/maven")
       env("MAVEN_CONFIG", "/.m2")
 
@@ -182,7 +167,7 @@ lazy val dockerSettings = Seq(
       copy(baseDirectory(_ / "config" / "log4j-stdout.properties").value, file("app/log4j-server.properties"))
       copy(baseDirectory(_ / "config" / "docker.conf").value, file("app/docker.conf"))
       copy(baseDirectory(_ / "config" / "docker.sh").value, file("app/settings.sh"))
-      copy(baseDirectory(_ / s"spark-dist-${Versions.spark}.tgz").value, file(s"spark-dist-${Versions.spark}.tgz"))
+      copy(baseDirectory(_ / s"spark-${Versions.spark}-bin-${Versions.hadoop}.tgz").value, file(s"spark-${Versions.spark}-bin-${Versions.hadoop}.tgz"))
       // Including envs in Dockerfile makes it easy to override from docker command
       env("JOBSERVER_MEMORY", "1G")
       env("SPARK_HOME", "/spark")
@@ -190,9 +175,9 @@ lazy val dockerSettings = Seq(
       run("mkdir", "-p", "/database")
       runRaw(
         s"""
-           |tar -xvf spark-dist-${Versions.spark}.tgz && \\
-           |mv dist /spark && \\
-           |rm spark-dist-${Versions.spark}.tgz
+           |tar -xvf spark-${Versions.spark}-bin-${Versions.hadoop}.tgz && \\
+           |mv spark-${Versions.spark}-bin-${Versions.hadoop} /spark && \\
+           |rm spark-${Versions.spark}-bin-${Versions.hadoop}.tgz
         """.stripMargin.trim
       )
       volume("/database")
@@ -203,10 +188,11 @@ lazy val dockerSettings = Seq(
     sbtdocker.ImageName(namespace = Some("lightbend"),
       repository = "spark-jobserver",
       tag = Some(
-        s"${version.value}" +
-          s".mesos-${Versions.mesos.split('-')(0)}" +
-          s".spark-${Versions.spark}" +
-          s".scala-${scalaBinaryVersion.value}")
+        s"${version.value}-" +
+          s"mesos${Versions.mesos.split('-')(0)}-" +
+          s"spark${Versions.spark}-" +
+          s"hadoop${Versions.hadoop}-" +
+          s"scala${scalaBinaryVersion.value}")
     )
   )
 )
