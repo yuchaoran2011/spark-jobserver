@@ -37,7 +37,7 @@ cmd='$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $JOBSERVER_MEMOR
 --conf spark.mesos.executor.docker.image=mesosphere/spark:1.1.0-2.1.1-hadoop-2.6
 --conf spark.mesos.executor.home=/opt/spark/dist
 --proxy-user root
---master mesos://10.10.0.120:5050
+--master mesos://leader.mesos:5050
 --deploy-mode client
 --driver-java-options "$GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES"
 $appdir/spark-job-server.jar $2 $3 $4 $conffile'

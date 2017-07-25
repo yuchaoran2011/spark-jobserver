@@ -167,7 +167,6 @@ lazy val dockerSettings = Seq(
       copy(baseDirectory(_ / "config" / "log4j-stdout.properties").value, file("app/log4j-server.properties"))
       copy(baseDirectory(_ / "config" / "docker.conf").value, file("app/docker.conf"))
       copy(baseDirectory(_ / "config" / "docker.sh").value, file("app/settings.sh"))
-      copy(baseDirectory(_ / s"spark-${Versions.spark}-bin-${Versions.hadoop}.tgz").value, file(s"spark-${Versions.spark}-bin-${Versions.hadoop}.tgz"))
       // Including envs in Dockerfile makes it easy to override from docker command
       env("JOBSERVER_MEMORY", "1G")
       env("SPARK_HOME", "/spark")
@@ -175,6 +174,7 @@ lazy val dockerSettings = Seq(
       run("mkdir", "-p", "/database")
       runRaw(
         s"""
+           |wget https://downloads.mesosphere.com/spark/assets/spark-${Versions.spark}-bin-${Versions.hadoop}.tgz && \\
            |tar -xvf spark-${Versions.spark}-bin-${Versions.hadoop}.tgz && \\
            |mv spark-${Versions.spark}-bin-${Versions.hadoop} /spark && \\
            |rm spark-${Versions.spark}-bin-${Versions.hadoop}.tgz
