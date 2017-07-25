@@ -22,7 +22,6 @@ get_abs_script_path
 
 GC_OPTS="-XX:+UseConcMarkSweepGC
          -verbose:gc -XX:+PrintGCTimeStamps -Xloggc:$appdir/gc.out
-         -XX:MaxPermSize=512m
          -XX:+CMSClassUnloadingEnabled "
 
 # To truly enable JMX in AWS and other containerized environments, also need to set
@@ -45,6 +44,11 @@ fi
 
 cmd='$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $JOBSERVER_MEMORY
   --conf "spark.executor.extraJavaOptions=$LOGGING_OPTS"
+  --conf spark.mesos.executor.docker.image=mesosphere/spark:1.1.0-2.1.1-hadoop-2.6
+  --conf spark.mesos.executor.home=/opt/spark/dist
+  --proxy-user root
+  --deploy-mode client
+  --master mesos://10.10.0.120:5050
   --driver-java-options "$GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES"
   $@ $appdir/spark-job-server.jar $conffile'
 if [ -z "$JOBSERVER_FG" ]; then
