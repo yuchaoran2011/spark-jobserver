@@ -79,7 +79,7 @@ object SparkJobUtils {
 
     Try(config.getString("spark.home")).foreach { home => conf.setSparkHome(home) }
 
-    // Set the Jetty port to 0 to find a random port
+    // Set the Jetty port to 4041. Spark UI available at <drive-node-ip>:4041
     conf.set("spark.ui.port", "4041")
 
     // Set spark broadcast factory in yarn-client mode

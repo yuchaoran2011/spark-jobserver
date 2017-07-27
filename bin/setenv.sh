@@ -83,6 +83,8 @@ if [ -z "$MAX_DIRECT_MEMORY" ]; then
   MAX_DIRECT_MEMORY=512M
 fi
 
+export SPARK_MESOS_EXECUTOR_DOCKER_IMAGE=mesosphere/spark:1.1.1-2.2.0-hadoop-2.6
+
 # This needs to be exported for standalone mode so drivers can connect to the Spark cluster
 export SPARK_HOME
 export YARN_CONF_DIR
